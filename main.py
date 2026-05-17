@@ -4,7 +4,6 @@ from streamlit_gsheets import GSheetsConnection
 from datetime import datetime
 from constants import DEFECT_LIST, STATUS_COLORS, LINES
 
-# --- [SETTING] ใช้รูปแบบหน้ากว้างแสดงผลสวยงามบนพีซี ---
 st.set_page_config(
     page_title="POST PRODUCTION",
     page_icon="🏭",
@@ -66,7 +65,6 @@ if not st.session_state.logged_in:
             p = st.text_input("Password", type="password")
 
             if st.button("Login", use_container_width=True, type="primary"):
-                # 🎯 [แก้ไขจุด Quota ล่ม]: ย้ายฟังก์ชันสแกนข้อมูลมาทำงานตรงนี้ บังคับให้โหลดเฉพาะจังหวะที่กดปุ่มเท่านั้น!
                 acc_df = load_csv("accounts")
 
                 if acc_df.empty:
