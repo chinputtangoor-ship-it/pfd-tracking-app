@@ -43,17 +43,17 @@ BOX_PACKING_OPTIONS = [
 
 # COLUMNS สำหรับจัดแผน
 PLAN_COLUMNS = [
-    "line", "batch_number", "sap_batch", "production_order",
-    "inspection_lot", "sales_order", "sales_order_item", "fert_code",
-    "semifinish_code", "item_qty", "need_af_box", "customer_name",
-    "planned_finish_date", "to_be_desp_on", "metal_detector", "print_type",
-    "country", "box_packing", "ink_cap", "roller_des_cap", "ink_body",
-    "roller_des_body", "batch_status"
+    "line", "batch number", "sap batch", "production order",
+    "inspection lot", "sales order", "sales order item", "fert code",
+    "semifinish code", "item qty", "need af box", "customer name",
+    "planned finish_date", "to be desp on", "metal detector", "print type",
+    "country", "box packing", "ink cap", "roller des cap", "ink body",
+    "roller des body", "batch status"
 ]
 
 # รายชื่อหมึก (Ink Options)
 INK_OPTIONS = [
-    "None", "RMI010004 Black ACG", "RMI010021 White ACG", "RMI010182 Black ACG/TEK",
+    "-", "RMI010004 Black ACG", "RMI010021 White ACG", "RMI010182 Black ACG/TEK",
     "RMI010017 Red ACG", "RMI010002 Black TEK", "RMI010057 Green TEK", "RMI010033 Yellow/Gold TEK"
 ]
 
