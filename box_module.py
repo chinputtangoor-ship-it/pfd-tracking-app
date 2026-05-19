@@ -8,6 +8,8 @@ def show_box_status_page(load_csv, save_to_csv):
     st.markdown("<div class='main-header'>📦 Box Status Recording</div>", unsafe_allow_html=True)
 
     # ==========================================
+    # STEP 1: เลือก Line
+    # ==========================================
     if 'sel_line' not in st.session_state:
         st.subheader("📍 เลือก Line")
         cols = st.columns(4)
@@ -15,7 +17,7 @@ def show_box_status_page(load_csv, save_to_csv):
             ["H501", "H502", "H503", "H504"],
             ["H505", "H506", "H507", "H508"],
             ["H509", "H510", "H511", "H512"],
-            ["H513", "", "", ""]
+            ["H513", "",     "",     ""    ]
         ]
         for row in matrix:
             for col_idx, line_name in enumerate(row):
@@ -25,18 +27,27 @@ def show_box_status_page(load_csv, save_to_csv):
                         st.rerun()
 
     # ==========================================
+    # STEP 2: เลือก Batch
+    # ==========================================
     elif 'sel_batch' not in st.session_state:
         st.subheader(f"📍 Line: {st.session_state.sel_line} > เลือก Batch")
-        p_df = load_csv("plan")  # ดึงข้อมูลผ่าน Cache 10 วินาที ช่วยเซฟ API
+        p_df = load_csv("plan")
 
         active_b = []
         if not p_df.empty:
-            line_col = 'line' if 'line' in p_df.columns else 'Line'
-            status_col = 'batch_status' if 'batch_status' in p_df.columns else 'batch status'
-            batch_col = 'batch_number' if 'batch_number' in p_df.columns else 'batch number'
+            line_col   = next((c for c in p_df.columns if c.strip().lower() == 'line'),         None)
+            status_col = next((c for c in p_df.columns if c.strip().lower() == 'batch status'), None)
+            batch_col  = next((c for c in p_df.columns if c.strip().lower() == 'batch'),        None)
 
-            active_b = p_df[(p_df[line_col] == st.session_state.sel_line) &
-                            (p_df[status_col] != "Finished")][batch_col].tolist()
+            if line_col and status_col and batch_col:
+                active_b = p_df[
+                    (p_df[line_col].astype(str).str.strip()   == st.session_state.sel_line) &
+                    (p_df[status_col].astype(str).str.strip().str.lower() != "finished")
+                ][batch_col].tolist()
+            else:
+                missing = [n for n, c in [("line", line_col), ("batch status", status_col), ("batch", batch_col)] if not c]
+                st.error(f"⚠️ ไม่พบคอลัมน์: {', '.join(missing)} ใน plan sheet")
+                st.caption(f"คอลัมน์ที่มีอยู่: {p_df.columns.tolist()}")
 
         if active_b:
             cols = st.columns(3)
@@ -52,13 +63,32 @@ def show_box_status_page(load_csv, save_to_csv):
             st.rerun()
 
     # ==========================================
+    # STEP 3: บันทึก Box Status
+    # ==========================================
     else:
         st.subheader(f"✅ {st.session_state.sel_line} | Batch: {st.session_state.sel_batch}")
         current_data = load_csv("box_status")
-        box_no = st.text_input("Box Number (เลขกล่อง)", key="input_box_no")
-        selected_stat = st.selectbox("สถานะ", BOX_STATUS, key="input_stat")
 
-        show_defect = selected_stat not in ["เลือก Status", "AF"]
+        clean_batch = str(st.session_state.sel_batch).strip()
+
+        # ✅ คำนวณเลขกล่องถัดไปอัตโนมัติ
+        next_box_no = 1
+        if not current_data.empty:
+            temp_df = current_data.copy()
+            temp_df.columns = [str(c).strip().lower() for c in temp_df.columns]
+            batch_c = next((c for c in temp_df.columns if c == 'batch'), None)
+            box_c   = next((c for c in temp_df.columns if c == 'box'),   None)
+
+            if batch_c and box_c:
+                batch_boxes = temp_df[temp_df[batch_c].astype(str).str.strip() == clean_batch][box_c]
+                existing_nos = pd.to_numeric(batch_boxes, errors='coerce').dropna()
+                if not existing_nos.empty:
+                    next_box_no = int(existing_nos.max()) + 1
+
+        st.info(f"📦 เลขกล่องถัดไปที่จะบันทึก: **{next_box_no}**")
+
+        selected_stat = st.selectbox("สถานะ", BOX_STATUS, key="input_stat")
+        show_defect   = selected_stat not in ["เลือก Status", "AF"]
 
         with st.form("box_form_action"):
             selected_defs = []
@@ -68,46 +98,26 @@ def show_box_status_page(load_csv, save_to_csv):
             c1, c2 = st.columns(2)
 
             if c1.form_submit_button("💾 บันทึกข้อมูล", use_container_width=True, type="primary"):
-                clean_box = str(box_no).strip()
-                clean_batch = str(st.session_state.sel_batch).strip()
 
-                # ตรรกะการเช็คซ้ำ
-                is_duplicate = False
-                if not current_data.empty:
-                    temp_df = current_data.copy()
-                    temp_df.columns = [str(c).strip().lower() for c in temp_df.columns]
-
-                    if 'batch' in temp_df.columns and 'box' in temp_df.columns:
-                        mask = (temp_df['batch'].astype(str).str.strip() == clean_batch) & \
-                               (temp_df['box'].astype(str).str.strip() == clean_box)
-                        if mask.any():
-                            is_duplicate = True
-
-                if not clean_box or selected_stat == "เลือก Status":
-                    st.error("❌ กรุณากรอกเลขกล่องและเลือกสถานะ")
+                if selected_stat == "เลือก Status":
+                    st.error("❌ กรุณาเลือกสถานะ")
 
                 elif show_defect and not selected_defs:
-                    st.error(f"❌ Status {selected_stat} จำเป็นต้องระบุสาเหตุเสีย (Defects)")
-
-                elif is_duplicate:
-                    st.warning(f"⚠️ เลขกล่องซ้ำ! กล่องที่ {clean_box} ของ Batch {clean_batch} มีในระบบแล้ว")
-                    st.info("กรุณาตรวจสอบเลขกล่องอีกครั้ง หรือเปลี่ยนเลขกล่องก่อนบันทึก")
+                    st.error(f"❌ Status '{selected_stat}' จำเป็นต้องระบุสาเหตุเสีย (Defects)")
 
                 else:
                     new_entry = pd.DataFrame([{
-                        "Time": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                        "Line": st.session_state.sel_line,
-                        "Batch": st.session_state.sel_batch,
-                        "Box": clean_box,
-                        "Status": selected_stat,
+                        "Time":    datetime.now().strftime("%Y-%m-%d %H:%M"),
+                        "Line":    st.session_state.sel_line,
+                        "Batch":   st.session_state.sel_batch,
+                        "Box":     next_box_no,
+                        "Status":  selected_stat,
                         "Defects": ",".join(selected_defs) if selected_defs else ""
                     }])
-
                     save_to_csv("box_status", new_entry)
                     st.cache_data.clear()
-                    st.success(f"✅ บันทึกกล่อง {clean_box} สำเร็จ!")
-                    del st.session_state.sel_batch
-                    st.rerun()
+                    st.success(f"✅ บันทึกกล่อง {next_box_no} | Batch: {clean_batch} สำเร็จ!")
+                    st.rerun()  # rerun เพื่ออัปเดตเลขกล่องถัดไป (ไม่ del sel_batch)
 
             if c2.form_submit_button("🔙 กลับ/ยกเลิก", use_container_width=True):
                 del st.session_state.sel_batch
