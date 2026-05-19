@@ -49,7 +49,7 @@ st.markdown("""
     .main-header { font-size: 28px; font-weight: 700; color: #1E3A8A; text-align: center; margin-bottom: 30px; }
     .footer { position: fixed; right: 20px; bottom: 10px; color: rgba(128, 128, 128, 0.5); font-size: 11px; }
     </style>
-    <div class="footer">© 2026 Production Tech | Develop by Phutthangkun | Ver.01.04</div>
+    <div class="footer">© 2026 Production Tech | Develop by Phutthangkun | Ver.01.02</div>
     """, unsafe_allow_html=True)
 
 if 'logged_in' not in st.session_state: st.session_state.logged_in = False
@@ -175,6 +175,10 @@ elif st.session_state.page == "Camera":
 elif st.session_state.page == "Re_pass":
     from repass_module import show_repass_page
     show_repass_page(load_csv, save_to_csv, conn)
+
+elif st.session_state.page == "Report":
+    from dashboard import show_dashboard_page
+    show_dashboard_page(load_csv)
 
 elif st.session_state.page == "Account":
     if st.session_state.user_data.get('role') != "admin":
