@@ -118,16 +118,14 @@ def show_dashboard_page(load_csv):
     # 📑 TAB 11: PROGRESS
     # =========================================================
     with t1:
-        st.markdown("### 🔍 ตัวกรองข้อมูลฝ่ายผลิตประจำสถานี")
-
-        # ดึงสถานะตัวแปรฟิลเตอร์ของ Tab 1 มาใช้งานควบคุมทุกตารางที่เกี่ยวข้อง
+        st.markdown("### 🔍 ตัวกรองข้อมูล")
         col_l, col_p, col_d = st.columns([1, 1, 1.5])
         with col_l:
             available_lines = ["ทั้งหมด"] + [str(l) for l in LINES]
             current_t1_line = st.selectbox("🏭 เลือกสายการผลิต (Line)", available_lines, key="t1_progress_line")
         with col_p:
             period_opt = ["เลือกช่วงวันที่เอง (Custom)", "รายสัปดาห์ (ย้อนหลัง 7 วัน)", "รายเดือน (ย้อนหลัง 30 วัน)"]
-            selected_period = st.selectbox("📅 ตัวกรองรอบเวลา", period_opt, key="t1_progress_period")
+            selected_period = st.selectbox("📅 ตัวกรองวันที่", period_opt, key="t1_progress_period")
         with col_d:
             if selected_period == "เลือกช่วงวันที่เอง (Custom)":
                 date_col_box = next((c for c in ['Timestamp', 'timestamp', 'Date', 'date'] if c in df_box.columns),
@@ -146,14 +144,12 @@ def show_dashboard_page(load_csv):
                 st.info(f"⚡ ระบบเปิดใช้งานโหมด {selected_period} อัตโนมัติ")
                 selected_dates = None
 
-        # ทำการกรองตารางกล่องหลัก และตาราง Rejection, Plan ตามฟิลเตอร์ทันทีเพื่อความสอดคล้องกันของรูป 1 และ 2
         df_box_filtered = filter_sub_dataframe(df_box, current_t1_line, selected_period, selected_dates)
         df_rej_filtered = filter_sub_dataframe(df_rej, current_t1_line, selected_period, selected_dates)
         df_plan_filtered = filter_sub_dataframe(df_plan, current_t1_line, selected_period, selected_dates)
 
         st.write("---")
 
-        # ตรวจสอบหัวคอลัมน์แบบยืดหยุ่น (Case-insensitive)
         status_col = next((c for c in ['Status', 'status', 'Grade', 'grade'] if c in df_box_filtered.columns), 'Status')
         line_col_box = next((c for c in ['Line', 'line', 'LINE'] if c in df_box_filtered.columns), 'Line')
         batch_col = next((c for c in ['Batch', 'batch', 'BATCH'] if c in df_box_filtered.columns), None)
@@ -161,9 +157,7 @@ def show_dashboard_page(load_csv):
                               'need af box')
         plan_batch_col = next((c for c in ['Batch', 'batch', 'BATCH'] if c in df_plan.columns), 'Batch')
 
-        # ✨ [CLEANSING POINT] จัดการล้างข้อมูลคอลัมน์ Batch ของทุกตารางให้ฟอร์แมตข้อความสะอาดเท่ากัน
         if batch_col and batch_col in df_box_filtered.columns:
-            # แปลงเป็น string -> ตัด .0 (กรณีหลุดมาจาก float) -> ลบช่องว่างหัวท้าย
             df_box_filtered[batch_col] = df_box_filtered[batch_col].astype(str).str.replace(r'\.0$', '',
                                                                                             regex=True).str.strip()
 
@@ -173,7 +167,6 @@ def show_dashboard_page(load_csv):
             df_plan_filtered[plan_batch_col] = df_plan_filtered[plan_batch_col].astype(str).str.replace(r'\.0$', '',
                                                                                                         regex=True).str.strip()
 
-        # ค้นหา Running Batch ให้สัมพันธ์กับไลน์ที่เลือก
         if batch_col and batch_col in df_box_filtered.columns and not df_box_filtered.empty:
             running_batches = df_box_filtered[df_box_filtered[batch_col] != '0'][batch_col].unique()
             running_batches = [b for b in running_batches if b and b.lower() != 'nan' and b != '0']
@@ -182,11 +175,9 @@ def show_dashboard_page(load_csv):
             running_batches = []
             running_batch_str = "ไม่พบข้อมูลคอลัมน์ Batch"
 
-        # 🎯 คำนวณหา Total Target (box) อิงตาม Batch เดี่ยวๆ
         if target_box_col in df_plan.columns and plan_batch_col in df_plan.columns and running_batches:
             df_plan_all = df_plan.copy()
             df_running_plan = df_plan_all[df_plan_all[plan_batch_col].isin(running_batches)]
-            # ดึงค่าสูงสุดรายแผนงานของ Batch นั้นๆ แล้วนำมารวมกัน
             total_target_box = df_running_plan.groupby(plan_batch_col)[target_box_col].max().sum()
         else:
             if target_box_col in df_plan_filtered.columns:
@@ -194,7 +185,6 @@ def show_dashboard_page(load_csv):
             else:
                 total_target_box = 0
 
-        # คำนวณจำนวนกล่องสถานะของดี (AF) ของไลน์ช่วงเวลานั้นๆ
         if status_col in df_box_filtered.columns:
             total_actual = len(df_box_filtered[df_box_filtered[status_col].astype(str).str.upper().str.strip() == 'AF'])
         else:
@@ -202,7 +192,6 @@ def show_dashboard_page(load_csv):
 
         total_backlog = pd.to_numeric(df_backlog['Total_caps'], errors='coerce').iloc[-1] if not df_backlog.empty else 0
 
-        # ยอด Rejection
         total_ats = pd.to_numeric(df_rej_filtered['ATS_kg'],
                                   errors='coerce').sum() if 'ATS_kg' in df_rej_filtered.columns else 0.0
         total_print = pd.to_numeric(df_rej_filtered['Print_kg'],
@@ -210,7 +199,6 @@ def show_dashboard_page(load_csv):
         total_cam_rej = pd.to_numeric(df_rej_filtered['Cam_kg'],
                                       errors='coerce').sum() if 'Cam_kg' in df_rej_filtered.columns else 0.0
 
-        # แสดงผลเมทริกซ์หลัก 6 ช่อง
         m1, m2, m3, mr1, mr2, mr3 = st.columns(6)
         m1.metric("🎯 Total Target (box)", f"{total_target_box:,.0f}")
         m2.metric("✅ Good (AF) Boxes", f"{total_actual:,.0f}")
@@ -223,15 +211,13 @@ def show_dashboard_page(load_csv):
             f"🏃 **Running Batch ปัจจุบัน ({'ไลน์การผลิต: ' + current_t1_line if current_t1_line != 'ทั้งหมด' else 'ทุกสายการผลิต'}):** {running_batch_str}")
         st.write("---")
 
-        # --- แถวแรก: กราฟแท่งความคืบหน้าคิดเป็น % ---
-        st.markdown("#### 📉 1. Production Progress Percentage By Line & Batch (% งานที่เสร็จเทียบกับเป้าหมาย)")
+        st.markdown("#### 📉 1. Production Progress")
 
         if (status_col in df_box_filtered.columns
                 and line_col_box in df_box_filtered.columns
                 and batch_col and batch_col in df_box_filtered.columns
                 and not df_box_filtered.empty):
 
-            # 1. นับ AF boxes แยกราย Line + Batch
             df_af = df_box_filtered[
                 df_box_filtered[status_col].astype(str).str.upper().str.strip() == 'AF'
                 ].copy()
@@ -422,7 +408,6 @@ def show_dashboard_page(load_csv):
                         if not i or i.lower() in ['nan', 'none', 'null', '0', '0.0', '-', '']:
                             continue
 
-                        # รูปแบบ: "Bubble(5)" หรือ "Mashed(11)"
                         if "(" in i and ")" in i:
                             try:
                                 name = i[:i.index("(")].strip()
@@ -432,16 +417,13 @@ def show_dashboard_page(load_csv):
                                 name = i.strip()
                                 count = 1
 
-                        # รูปแบบ: "5)" ← เศษหางที่หลุดจากการ split เช่น "Bubble(5),Mashed(11)"
                         elif i.endswith(")") and "(" not in i:
                             continue  # ข้ามเศษหางทันที
 
-                        # รูปแบบ: ชื่อเปล่าๆ ไม่มีวงเล็บ
                         else:
                             name = i.strip()
                             count = 1
 
-                        # Validate ชื่อ — ต้องมีตัวอักษรอย่างน้อย 1 ตัว
                         if not name:
                             continue
                         if not any(c.isalpha() for c in name):
@@ -467,9 +449,9 @@ def show_dashboard_page(load_csv):
                         fig_def.update_layout(height=380, margin=dict(t=10, b=10, l=10, r=10))
                         st.plotly_chart(fig_def, use_container_width=True)
                     else:
-                        st.info("🟢 กล้องวิชั่นทำงานเสถียร! ไม่มีรายการของเสียในช่วงเวลานี้")
+                        st.info("🟢 ไม่มีรายการของเสียในช่วงเวลานี้")
                 else:
-                    st.info("🟢 กล้องวิชั่นทำงานเสถียร! ยังไม่มีรายการประวัติของเสียในช่วงนี้")
+                    st.info("🟢 ยังไม่มีรายการประวัติของเสียในช่วงนี้")
             else:
                 st.info("💡 ไม่มีข้อมูลบันทึกในช่วงเวลาที่เลือก")
 
@@ -538,7 +520,7 @@ def show_dashboard_page(load_csv):
         df_repass_filtered, _ = render_filter_widgets(df_repass, "t3_repass")
         st.write("---")
 
-        st.markdown("##### 📍 แผนภูมิปริมาณความถี่การส่งงาน Re-pass แยกราย Line")
+        st.markdown("##### 📍 ปริมาณความถี่การส่งงาน Re-pass แยกราย Line")
         if not df_repass_filtered.empty and 'Line' in df_repass_filtered.columns:
             repass_counts = df_repass_filtered.groupby('Line').size().reset_index(name='Counts')
             fig_re = px.bar(repass_counts, x='Line', y='Counts', text='Counts', color='Counts',
@@ -547,7 +529,7 @@ def show_dashboard_page(load_csv):
             fig_re.update_layout(plot_bgcolor='rgba(0,0,0,0)', height=320)
             st.plotly_chart(fig_re, use_container_width=True)
         else:
-            st.info("🔄 สภาพแวดล้อมปกติ ไม่มีข้อมูลประวัติการส่งชิ้นงาน Re-pass")
+            st.info("🔄 ไม่มีข้อมูลประวัติการส่งชิ้นงาน Re-pass")
 
         st.write("---")
 
@@ -564,7 +546,7 @@ def show_dashboard_page(load_csv):
         st.write("---")
 
         st.markdown(
-            "##### 📋 รายการชิ้นงานที่อยู่ระหว่างรอการ Re-pass และตรวจสอบซ้ำ (ดึงข้อมูลโครงสร้างเรียลไทม์ตามชีต box_status)")
+            "##### 📋 รายการชิ้นงานที่อยู่ระหว่างรอการ Re-pass")
 
         if status_col in df_box.columns and not df_box.empty:
             df_pending_box = df_box[df_box[status_col].astype(str).str.strip().str.upper() != 'AF']
@@ -575,10 +557,9 @@ def show_dashboard_page(load_csv):
                     f"⚠️ ตรวจพบจำนวนกล่องงานคงค้างรอการ Re-pass ทั้งสิ้น: {len(df_pending_box):,} กล่อง ประจำช่วงเวลา")
             else:
                 st.success(
-                    "🟢 ยอดเยี่ยม! ข้อมูลในระบบฐานข้อมูลหลักเปลี่ยนรูปกลับมาเป็นเกรดดีผ่านเกณฑ์ (AF) เรียบร้อยครบถ้วน ไม่มีรายการงานค้างสะสม")
+                    "🟢 ยอดเยี่ยม! ไม่มีรายการงานค้างสะสม")
         else:
-            st.info("💡 ไม่มีประวัติข้อมูลกล่องสถานะคงเหลือรอรับรอบตรวจสอบซ้ำในช่วงเวลานี้")
+            st.info("💡 ไม่มีประวัติข้อมูลกล่องงานค้างในช่วงเวลานี้")
 
     st.caption(
-        f"📊 ระบบประมวลผลและกระจายชุดข้อมูลข้อมูลอัตโนมัติล่าสุดเมื่อ: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-
+        f"📊 ระบบประมวลผลชุดข้อมูลข้อมูลอัตโนมัติล่าสุดเมื่อ: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
