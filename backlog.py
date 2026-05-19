@@ -88,9 +88,9 @@ def show_backlog_page(load_csv, save_to_csv):
         with st.form("backlog_form_v3"):
             st.markdown("### 📊 1. ยอดค้างสะสมในระบบปัจจุบัน (Current Backlog)")
             m1, m2, m3 = st.columns(3)
-            m1.metric(label="📌 ATS คงค้างเดิม",      value=f"{old_ats:,} caps")
-            m2.metric(label="📌 Printing คงค้างเดิม", value=f"{old_print:,} caps")
-            m3.metric(label="📌 Camera คงค้างเดิม",   value=f"{old_cam:,} caps")
+            m1.metric(label="📌 ATS คงค้างเดิม",      value=f"{old_ats:,} box")
+            m2.metric(label="📌 Printing คงค้างเดิม", value=f"{old_print:,} box")
+            m3.metric(label="📌 Camera คงค้างเดิม",   value=f"{old_cam:,} box")
 
             st.markdown("---")
             st.markdown("### ⚙️ 2. ระบุจำนวนเพื่อคำนวณยอด")
@@ -120,7 +120,7 @@ def show_backlog_page(load_csv, save_to_csv):
                 final_cam   = (old_cam   + add_cam)   - clear_cam
 
                 if final_ats < 0 or final_print < 0 or final_cam < 0:
-                    st.error("❌ ไม่สามารถบันทึกได้ เนื่องจากจำนวนที่เคลียร์สูงเกินยอดคงค้าง (ยอดติดลบไม่ได้)")
+                    st.error("❌ ไม่สามารถบันทึกได้ เนื่องจากจำนวนที่เคลียร์สูงเกินยอดคงค้าง")
                 else:
                     new_backlog = pd.DataFrame([{
                         "Time":       datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
