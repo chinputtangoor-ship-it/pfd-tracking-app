@@ -5,17 +5,16 @@ from datetime import datetime
 
 def show_rejection_page(load_csv, save_to_csv):
     st.markdown("<div class='main-header'>🗑️ Rejection Weight Recording</div>", unsafe_allow_html=True)
+
     if 'sel_line' not in st.session_state:
         st.subheader("📍 เลือก Line")
-
         cols = st.columns(4)
         matrix = [
-            ["H501", "H502", "H503", "H504"],  # แถวที่ 1
-            ["H505", "H506", "H507", "H508"],  # แถวที่ 2
-            ["H509", "H510", "H511", "H512"],  # แถวที่ 3
-            ["H513", "", "", ""]  # แถวที่ 4
+            ["H501", "H502", "H503", "H504"],
+            ["H505", "H506", "H507", "H508"],
+            ["H509", "H510", "H511", "H512"],
+            ["H513", "",     "",     ""    ]
         ]
-
         for row in matrix:
             for col_idx, line_name in enumerate(row):
                 if line_name != "":
@@ -23,19 +22,26 @@ def show_rejection_page(load_csv, save_to_csv):
                         st.session_state.sel_line = line_name
                         st.rerun()
 
-    # ==========================================
     elif 'sel_batch' not in st.session_state:
         st.subheader(f"📍 Line: {st.session_state.sel_line} > เลือก Batch")
         p_df = load_csv("plan")
         active_b = []
 
         if not p_df.empty:
-            line_col = 'line' if 'line' in p_df.columns else 'Line'
-            status_col = 'batch_status' if 'batch_status' in p_df.columns else 'batch status'
-            batch_col = 'batch_number' if 'batch_number' in p_df.columns else 'batch number'
+            # ✅ case-insensitive detect
+            line_col   = next((c for c in p_df.columns if c.strip().lower() == 'line'),         None)
+            status_col = next((c for c in p_df.columns if c.strip().lower() == 'batch status'), None)
+            batch_col  = next((c for c in p_df.columns if c.strip().lower() == 'batch'),        None)
 
-            active_b = p_df[(p_df[line_col] == st.session_state.sel_line) &
-                            (p_df[status_col] != "Finished")][batch_col].tolist()
+            if line_col and status_col and batch_col:
+                active_b = p_df[
+                    (p_df[line_col].astype(str).str.strip()   == st.session_state.sel_line) &
+                    (p_df[status_col].astype(str).str.strip().str.lower() != "finished")
+                ][batch_col].tolist()
+            else:
+                missing = [n for n, c in [("line", line_col), ("batch status", status_col), ("batch", batch_col)] if not c]
+                st.error(f"⚠️ ไม่พบคอลัมน์: {missing} ใน plan sheet")
+                st.caption(f"คอลัมน์ที่มีอยู่: {p_df.columns.tolist()}")
 
         if active_b:
             cols = st.columns(3)
@@ -50,7 +56,6 @@ def show_rejection_page(load_csv, save_to_csv):
             del st.session_state.sel_line
             st.rerun()
 
-    # ==========================================
     else:
         st.subheader(f"✅ Line: {st.session_state.sel_line} | Batch: {st.session_state.sel_batch}")
 
@@ -63,26 +68,22 @@ def show_rejection_page(load_csv, save_to_csv):
             h3.info("**Camera Machine**")
 
             r1, r2, r3 = st.columns(3)
-            w_ats = r1.number_input("ATS Weight", min_value=0.0, step=0.001, format="%.3f",
-                                    label_visibility="collapsed")
-            w_print = r2.number_input("Print Weight", min_value=0.0, step=0.001, format="%.3f",
-                                      label_visibility="collapsed")
-            w_cam = r3.number_input("Cam Weight", min_value=0.0, step=0.001, format="%.3f",
-                                    label_visibility="collapsed")
+            w_ats   = r1.number_input("ATS Weight",   min_value=0.0, step=0.001, format="%.3f", label_visibility="collapsed")
+            w_print = r2.number_input("Print Weight",  min_value=0.0, step=0.001, format="%.3f", label_visibility="collapsed")
+            w_cam   = r3.number_input("Cam Weight",    min_value=0.0, step=0.001, format="%.3f", label_visibility="collapsed")
 
             st.divider()
             c1, c2 = st.columns(2)
 
             if c1.form_submit_button("💾 บันทึกข้อมูล", use_container_width=True, type="primary"):
                 new_rej_data = pd.DataFrame([{
-                    "Time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "Line": st.session_state.sel_line,
-                    "Batch": st.session_state.sel_batch,
-                    "ATS_kg": w_ats,
+                    "Time":     datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "Line":     st.session_state.sel_line,
+                    "Batch":    st.session_state.sel_batch,
+                    "ATS_kg":   w_ats,
                     "Print_kg": w_print,
-                    "Cam_kg": w_cam
+                    "Cam_kg":   w_cam
                 }])
-
                 save_to_csv("rejection", new_rej_data)
                 st.cache_data.clear()
                 st.success("🎉 บันทึกน้ำหนักงานเสีย สำเร็จ!")
@@ -92,4 +93,3 @@ def show_rejection_page(load_csv, save_to_csv):
             if c2.form_submit_button("❌ ยกเลิก", use_container_width=True):
                 del st.session_state.sel_batch
                 st.rerun()
-
