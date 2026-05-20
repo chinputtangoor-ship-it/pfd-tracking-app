@@ -14,10 +14,10 @@ def show_box_status_page(load_csv, save_to_csv):
         st.subheader("📍 เลือก Line")
         cols = st.columns(4)
         matrix = [
-            ["H501", "H502", "H503", "H504"],
-            ["H505", "H506", "H507", "H508"],
-            ["H509", "H510", "H511", "H512"],
-            ["H513", "",     "",     ""    ]
+            ["H501", "H505", "H508", "H511"],
+            ["H502", "H506", "H509", "H512"],
+            ["H503", "H507", "H510", "H513"],
+            ["H504", "", "", ""]
         ]
         for row in matrix:
             for col_idx, line_name in enumerate(row):
@@ -35,17 +35,18 @@ def show_box_status_page(load_csv, save_to_csv):
 
         active_b = []
         if not p_df.empty:
-            line_col   = next((c for c in p_df.columns if c.strip().lower() == 'line'),         None)
+            line_col = next((c for c in p_df.columns if c.strip().lower() == 'line'), None)
             status_col = next((c for c in p_df.columns if c.strip().lower() == 'batch status'), None)
-            batch_col  = next((c for c in p_df.columns if c.strip().lower() == 'batch'),        None)
+            batch_col = next((c for c in p_df.columns if c.strip().lower() == 'batch'), None)
 
             if line_col and status_col and batch_col:
                 active_b = p_df[
-                    (p_df[line_col].astype(str).str.strip()   == st.session_state.sel_line) &
+                    (p_df[line_col].astype(str).str.strip() == st.session_state.sel_line) &
                     (p_df[status_col].astype(str).str.strip().str.lower() != "finished")
-                ][batch_col].tolist()
+                    ][batch_col].tolist()
             else:
-                missing = [n for n, c in [("line", line_col), ("batch status", status_col), ("batch", batch_col)] if not c]
+                missing = [n for n, c in [("line", line_col), ("batch status", status_col), ("batch", batch_col)] if
+                           not c]
                 st.error(f"⚠️ ไม่พบคอลัมน์: {', '.join(missing)} ใน plan sheet")
                 st.caption(f"คอลัมน์ที่มีอยู่: {p_df.columns.tolist()}")
 
@@ -77,7 +78,7 @@ def show_box_status_page(load_csv, save_to_csv):
             temp_df = current_data.copy()
             temp_df.columns = [str(c).strip().lower() for c in temp_df.columns]
             batch_c = next((c for c in temp_df.columns if c == 'batch'), None)
-            box_c   = next((c for c in temp_df.columns if c == 'box'),   None)
+            box_c = next((c for c in temp_df.columns if c == 'box'), None)
 
             if batch_c and box_c:
                 batch_boxes = temp_df[temp_df[batch_c].astype(str).str.strip() == clean_batch][box_c]
@@ -85,10 +86,10 @@ def show_box_status_page(load_csv, save_to_csv):
                 if not existing_nos.empty:
                     next_box_no = int(existing_nos.max()) + 1
 
-        st.info(f"📦 เลขกล่องถัดไปที่จะบันทึก: **{next_box_no}**")
+        st.info(f"📦 Box: **{next_box_no}**")
 
         selected_stat = st.selectbox("สถานะ", BOX_STATUS, key="input_stat")
-        show_defect   = selected_stat not in ["เลือก Status", "AF"]
+        show_defect = selected_stat not in ["เลือก Status", "AF"]
 
         with st.form("box_form_action"):
             selected_defs = []
@@ -107,11 +108,11 @@ def show_box_status_page(load_csv, save_to_csv):
 
                 else:
                     new_entry = pd.DataFrame([{
-                        "Time":    datetime.now().strftime("%Y-%m-%d %H:%M"),
-                        "Line":    st.session_state.sel_line,
-                        "Batch":   st.session_state.sel_batch,
-                        "Box":     next_box_no,
-                        "Status":  selected_stat,
+                        "Time": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                        "Line": st.session_state.sel_line,
+                        "Batch": st.session_state.sel_batch,
+                        "Box": next_box_no,
+                        "Status": selected_stat,
                         "Defects": ",".join(selected_defs) if selected_defs else ""
                     }])
                     save_to_csv("box_status", new_entry)
