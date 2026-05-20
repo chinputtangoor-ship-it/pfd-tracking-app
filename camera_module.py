@@ -11,12 +11,20 @@ def show_camera_page(load_csv, save_to_csv):
     # STEP 1: เลือก Line
     # ==========================================
     if 'sel_line' not in st.session_state:
-        st.subheader("📍 เลือก Line ที่ต้องการตรวจสอบ")
+        st.subheader("📍 1. เลือก Line ที่ต้องการตรวจสอบ")
         cols = st.columns(4)
-        for i, l in enumerate(LINES):
-            if cols[i % 4].button(l, key=f"cam_line_{l}", use_container_width=True):
-                st.session_state.sel_line = l
-                st.rerun()
+        matrix = [
+            ["H501", "H505", "H508", "H511"],
+            ["H502", "H506", "H509", "H512"],
+            ["H503", "H507", "H510", "H513"],
+            ["H504", "", "", ""]
+        ]
+        for row in matrix:
+            for col_idx, line_name in enumerate(row):
+                if line_name != "":
+                    if cols[col_idx].button(line_name, key=f"back_l_{line_name}", use_container_width=True):
+                        st.session_state.sel_line = line_name
+                        st.rerun()
 
     # ==========================================
     # STEP 2: เลือก Batch
@@ -63,7 +71,7 @@ def show_camera_page(load_csv, save_to_csv):
         line_target  = st.session_state.sel_line
         batch_target = st.session_state.sel_batch
 
-        st.subheader("✅ รายงานสถานะกล้องตรวจจับงาน")
+        st.subheader("✅ Camera Analysis")
         st.info(f"📹 **Line:** {line_target}  |  🆔 **Batch:** {batch_target}")
 
         with st.form("camera_full_form"):
