@@ -57,6 +57,6 @@ INK_OPTIONS = [
     "RMI010017 Red ACG", "RMI010002 Black TEK", "RMI010057 Green TEK", "RMI010033 Yellow/Gold TEK"
 ]
 
-BATCH_STATUS = ["Running", "Finish"]
+BATCH_STATUS = ["Planing", "Running", "Finish"]
 
 BOX_STATUS = ["AF", "HP", "HUP", "Sort", "PS", "Scrap", "HFX"]
