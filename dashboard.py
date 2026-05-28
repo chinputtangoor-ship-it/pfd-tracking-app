@@ -180,10 +180,12 @@ def show_dashboard_page(load_csv):
     n_box = len(df_box_f)
     st.caption(f"🔍 กรองแล้ว — Box Status: {n_box:,} รายการ  |  Line: {filter_line}  |  ช่วงเวลา: {filter_period}")
 
-    # ── running plan ─────────────────────────────────────────────────────────
+    # ── running plan: เฉพาะ batch ที่ยังไม่ finished ─────────────────────────
     running_plan = pd.DataFrame()
     if plan_status_col and not df_plan_f.empty:
-        running_plan = df_plan_f[df_plan_f[plan_status_col].astype(str).str.strip().str.lower() != 'finished']
+        running_plan = df_plan_f[
+            df_plan_f[plan_status_col].astype(str).str.strip().str.lower() != 'finished'
+        ]
 
     # ── KPI รวม (คำนวณจากข้อมูลที่ filter แล้ว) ─────────────────────────────
     total_target = 0
@@ -316,27 +318,46 @@ def show_dashboard_page(load_csv):
 
         with col_prog:
             st.markdown("##### 📊 Production Progress % by Line & Batch")
-            if box_status_col and box_line_col and box_batch_col and not df_box_f.empty and plan_target_col and plan_batch_col:
-                df_af_only = df_box_f[df_box_f[box_status_col].astype(str).str.upper().str.strip()=='AF']
-                df_prog    = df_af_only.groupby([box_line_col,box_batch_col]).size().reset_index(name='Good_Boxes')
-                df_plan_m  = df_plan.copy()
-                df_plan_m[plan_target_col] = pd.to_numeric(df_plan_m[plan_target_col], errors='coerce').fillna(0)
+
+            # ── [แก้ไข] ใช้ running_plan เท่านั้น (batch ที่ยัง active ไม่ใช่ finished) ──
+            if (box_status_col and box_line_col and box_batch_col and not df_box_f.empty
+                    and plan_target_col and plan_batch_col and not running_plan.empty):
+
+                df_af_only = df_box_f[df_box_f[box_status_col].astype(str).str.upper().str.strip() == 'AF']
+
+                # นับ AF box ต่อ Line+Batch
+                df_prog = df_af_only.groupby([box_line_col, box_batch_col]).size().reset_index(name='Good_Boxes')
+
+                # ดึง Target จาก running_plan (batch ที่ไม่ใช่ finished)
+                df_running_m = running_plan.copy()
+                df_running_m[plan_target_col] = pd.to_numeric(df_running_m[plan_target_col], errors='coerce').fillna(0)
 
                 if plan_line_col:
-                    df_tgt = (df_plan_m.groupby([plan_line_col,plan_batch_col])[plan_target_col]
+                    df_tgt = (df_running_m
+                              .groupby([plan_line_col, plan_batch_col])[plan_target_col]
                               .first().reset_index()
-                              .rename(columns={plan_line_col:box_line_col, plan_batch_col:box_batch_col,
-                                               plan_target_col:'Target'}))
-                    df_prog = df_prog.merge(df_tgt, on=[box_line_col,box_batch_col], how='left')
+                              .rename(columns={
+                                  plan_line_col: box_line_col,
+                                  plan_batch_col: box_batch_col,
+                                  plan_target_col: 'Target'
+                              }))
+                    df_prog = df_prog.merge(df_tgt, on=[box_line_col, box_batch_col], how='inner')
+                    # inner join → เหลือเฉพาะ batch ที่อยู่ใน running_plan เท่านั้น
                 else:
-                    tgt_d = df_plan_m.groupby(plan_batch_col)[plan_target_col].first().to_dict()
+                    tgt_d = df_running_m.groupby(plan_batch_col)[plan_target_col].first().to_dict()
                     df_prog['Target'] = df_prog[box_batch_col].map(tgt_d)
+                    df_prog = df_prog.dropna(subset=['Target'])
 
                 df_prog['Target'] = df_prog['Target'].fillna(0)
-                df_prog['Pct']    = df_prog.apply(lambda r: round(r['Good_Boxes']/r['Target']*100,1) if r['Target']>0 else 0.0, axis=1)
-                df_prog['Label']  = df_prog[box_line_col] + "<br>(" + df_prog[box_batch_col].str[-6:] + ")"
-                df_prog['Color']  = df_prog['Pct'].apply(lambda x: '#00d4aa' if x>=90 else ('#ffa502' if x>=60 else '#ff4757'))
-                df_prog = df_prog.sort_values([box_line_col,box_batch_col])
+                df_prog['Pct']    = df_prog.apply(
+                    lambda r: round(r['Good_Boxes'] / r['Target'] * 100, 1) if r['Target'] > 0 else 0.0,
+                    axis=1
+                )
+                df_prog['Label']  = df_prog[box_line_col] + "<br>(" + df_prog[box_batch_col].astype(str).str[-6:] + ")"
+                df_prog['Color']  = df_prog['Pct'].apply(
+                    lambda x: '#00d4aa' if x >= 90 else ('#ffa502' if x >= 60 else '#ff4757')
+                )
+                df_prog = df_prog.sort_values([box_line_col, box_batch_col])
 
                 if not df_prog.empty:
                     fig_p = go.Figure(go.Bar(
@@ -351,14 +372,14 @@ def show_dashboard_page(load_csv):
                     fig_p.update_layout(
                         height=380, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
                         font_color='#cdd9e5', margin=dict(t=30,b=10,l=10,r=10),
-                        yaxis=dict(ticksuffix='%', range=[0,max(df_prog['Pct'].max()*1.25,110)], gridcolor='#1e2a3a'),
+                        yaxis=dict(ticksuffix='%', range=[0, max(df_prog['Pct'].max() * 1.25, 110)], gridcolor='#1e2a3a'),
                         xaxis=dict(gridcolor='#1e2a3a')
                     )
                     st.plotly_chart(fig_p, use_container_width=True)
                 else:
-                    st.info("💡 ไม่มีข้อมูล AF")
+                    st.info("💡 ไม่มี Batch ที่กำลัง Running")
             else:
-                st.info("💡 ไม่มีข้อมูลเพียงพอ")
+                st.info("💡 ไม่มีข้อมูลเพียงพอ หรือไม่มี Batch ที่กำลัง Running")
 
     # ════════════════════════════════════════════════════════════════════════
     # TAB 2
@@ -634,15 +655,14 @@ def show_dashboard_page(load_csv):
 
         st.markdown("---")
 
-        # ── Non-AF Pending — dedup เอาแถวล่าสุดของแต่ละ Line+Batch+Box ────────
+        # ── Non-AF Pending ────────────────────────────────────────────────────
         st.markdown("<div class='section-header'>⚠️ กล่องที่รอการ Re-pass / ยังไม่ผ่าน (Non-AF)</div>",
                     unsafe_allow_html=True)
 
-        if box_status_col and not df_box.empty:  # ใช้ df_box ดิบ (ไม่ filter time เพื่อให้เห็นสถานะล่าสุด)
+        if box_status_col and not df_box.empty:
             df_box_latest = df_box.copy()
 
-            # ✅ dedup: เอา record ล่าสุดของแต่ละ Line+Batch+Box
-            # sort by time แล้ว groupby เอา last
+            # dedup: เอา record ล่าสุดของแต่ละ Line+Batch+Box
             if box_time_col and box_line_col and box_batch_col and box_box_col:
                 df_box_latest = (
                     df_box_latest
@@ -667,25 +687,73 @@ def show_dashboard_page(load_csv):
 
             if not df_pending.empty:
                 col_tbl2, col_pie = st.columns([2, 1])
+
                 with col_tbl2:
-                    st.markdown(f"**พบ {len(df_pending):,} กล่อง** รอดำเนินการ "
-                                f"<span style='font-size:11px;color:#7ab3d4;'>(แสดงสถานะล่าสุดของแต่ละกล่อง)</span>",
-                                unsafe_allow_html=True)
+                    st.markdown(
+                        f"**พบ {len(df_pending):,} กล่อง** รอดำเนินการ "
+                        f"<span style='font-size:11px;color:#7ab3d4;'>(แสดงสถานะล่าสุดของแต่ละกล่อง)</span>",
+                        unsafe_allow_html=True
+                    )
                     st.dataframe(df_pending, use_container_width=True, hide_index=True, height=250)
+
                 with col_pie:
-                    STATUS_COLORS_MAP = {'Sort':'#f1c40f','PS':'#e67e22','HP':'#3498db',
-                                         'HUP':'#2980b9','HFX':'#9b59b6','Scrap':'#e74c3c'}
-                    s_dist = (df_pending[box_status_col].astype(str).str.strip()
-                              .value_counts().reset_index())
-                    s_dist.columns = ['Status','Count']
-                    clrs   = [STATUS_COLORS_MAP.get(s,'#95a5a6') for s in s_dist['Status']]
-                    fig_pie = px.pie(s_dist, values='Count', names='Status',
-                                     color_discrete_sequence=clrs, hole=0.45)
-                    fig_pie.update_traces(textinfo='percent+label', textposition='inside')
-                    fig_pie.update_layout(
-                        height=250, paper_bgcolor='rgba(0,0,0,0)',
-                        font_color='#cdd9e5', margin=dict(t=10,b=10,l=10,r=10), showlegend=False)
-                    st.plotly_chart(fig_pie, use_container_width=True)
+                    # ── [แก้ไข] Pie chart นับจาก Defects ของ df_pending ──────────
+                    pending_defect_counts = {}
+                    if box_defect_col and box_defect_col in df_pending.columns:
+                        for val in df_pending[box_defect_col].astype(str):
+                            for d in val.split(","):
+                                d = d.strip()
+                                if d and d.lower() not in ['nan', 'none', '', '0', '-']:
+                                    pending_defect_counts[d] = pending_defect_counts.get(d, 0) + 1
+
+                    if pending_defect_counts:
+                        # มี defect data → แสดง pie ตาม defect type
+                        df_def_pie = (
+                            pd.DataFrame(list(pending_defect_counts.items()), columns=['Defect', 'Count'])
+                            .sort_values('Count', ascending=False)
+                        )
+                        DEFECT_COLORS = [
+                            '#ff4757', '#ffa502', '#54a0ff', '#00d4aa',
+                            '#9b59b6', '#e67e22', '#f1c40f', '#2ecc71',
+                            '#e74c3c', '#3498db'
+                        ]
+                        clrs_def = DEFECT_COLORS[:len(df_def_pie)]
+                        fig_pie = px.pie(
+                            df_def_pie, values='Count', names='Defect',
+                            color_discrete_sequence=clrs_def, hole=0.45
+                        )
+                        fig_pie.update_traces(textinfo='percent+label', textposition='inside')
+                        fig_pie.update_layout(
+                            title=dict(text="Defect ของ Non-AF", font_color='#7ab3d4', font_size=12),
+                            height=280, paper_bgcolor='rgba(0,0,0,0)',
+                            font_color='#cdd9e5', margin=dict(t=40, b=10, l=10, r=10),
+                            showlegend=False
+                        )
+                        st.plotly_chart(fig_pie, use_container_width=True)
+                    else:
+                        # ไม่มี defect col → fallback แสดงตาม Status เหมือนเดิม
+                        STATUS_COLORS_MAP = {
+                            'Sort': '#f1c40f', 'PS': '#e67e22', 'HP': '#3498db',
+                            'HUP': '#2980b9', 'HFX': '#9b59b6', 'Scrap': '#e74c3c'
+                        }
+                        s_dist = (
+                            df_pending[box_status_col].astype(str).str.strip()
+                            .value_counts().reset_index()
+                        )
+                        s_dist.columns = ['Status', 'Count']
+                        clrs = [STATUS_COLORS_MAP.get(s, '#95a5a6') for s in s_dist['Status']]
+                        fig_pie = px.pie(
+                            s_dist, values='Count', names='Status',
+                            color_discrete_sequence=clrs, hole=0.45
+                        )
+                        fig_pie.update_traces(textinfo='percent+label', textposition='inside')
+                        fig_pie.update_layout(
+                            title=dict(text="Status ของ Non-AF", font_color='#7ab3d4', font_size=12),
+                            height=280, paper_bgcolor='rgba(0,0,0,0)',
+                            font_color='#cdd9e5', margin=dict(t=40, b=10, l=10, r=10),
+                            showlegend=False
+                        )
+                        st.plotly_chart(fig_pie, use_container_width=True)
             else:
                 st.success("🟢 ทุกกล่องผ่านเกณฑ์ AF แล้ว ไม่มีงานค้าง")
         else:
