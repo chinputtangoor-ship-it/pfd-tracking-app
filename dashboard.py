@@ -558,51 +558,65 @@ def show_dashboard_page(load_csv):
         with col_tbl:
             st.markdown("##### 📊 สรุปผลแต่ละสายการผลิต")
             rows = []
-            if box_line_col and box_status_col and not df_box_f.empty:
-                for ln in sorted(df_box_f[box_line_col].unique()):
-                    ln_df   = df_box_f[df_box_f[box_line_col]==ln]
-                    n_af    = (ln_df[box_status_col].astype(str).str.upper().str.strip()=='AF').sum()
-                    n_tot   = len(ln_df)
-                    n_scrap = n_tot - n_af
-                    tgt     = 0
-                    if plan_line_col and plan_batch_col and plan_target_col and not running_plan.empty:
-                        ln_pl = running_plan[running_plan[plan_line_col].astype(str).str.strip()==str(ln).strip()]
-                        if not ln_pl.empty:
-                            tgt = pd.to_numeric(ln_pl[plan_target_col], errors='coerce').fillna(0).sum()
-                    yld   = round(n_af/tgt*100,1)     if tgt>0   else 0.0
-                    scr   = round(n_scrap/n_tot*100,1) if n_tot>0 else 0.0
-                    rej_kg = 0.0
-                    if rej_line_col and not df_rej_f.empty:
-                        ln_rej = df_rej_f[df_rej_f[rej_line_col].astype(str).str.strip()==str(ln).strip()]
-                        for rc in [rej_ats_col,rej_prt_col,rej_cam_col]:
-                            if rc: rej_kg += pd.to_numeric(ln_rej[rc], errors='coerce').sum()
-                    bl_val = 0
-                    if bl_line_col and bl_total_col and not df_backlog_f.empty:
-                        ln_bl = df_backlog_f[df_backlog_f[bl_line_col].astype(str).str.strip()==str(ln).strip()]
-                        if not ln_bl.empty:
-                            bl_val = int(pd.to_numeric(ln_bl[bl_total_col], errors='coerce').iloc[-1])
-                    rows.append({'Line':str(ln),'AF Box':n_af,'Target':int(tgt),
-                                 'Yield%':yld,'Scrap%':scr,'Rej (kg)':round(rej_kg,2),
-                                 'Backlog':bl_val,'Status':"🟢" if scr<=3 else ("🟡" if scr<=10 else "🔴")})
+            all_lines = sorted(df_box_f[box_line_col].unique())
+            for ln in all_lines:
+                ln_pl = running_plan[
+                    (running_plan[plan_line_col].astype(str).str.strip() == str(ln).strip()) &
+                    (running_plan[plan_status_col].astype(str).str.upper().str.strip() == 'RUNNING')
+                    ]
+
+                if ln_pl.empty:
+                    continue
+
+                ln_df = df_box_f[df_box_f[box_line_col] == ln]
+                n_af = (ln_df[box_status_col].astype(str).str.upper().str.strip() == 'AF').sum()
+                n_tot = len(ln_df)
+                n_scrap = n_tot - n_af
+
+                tgt = pd.to_numeric(ln_pl[plan_target_col], errors='coerce').fillna(0).sum()
+
+                yld = round(n_af / tgt * 100, 1) if tgt > 0 else 0.0
+                scr = round(n_scrap / n_tot * 100, 1) if n_tot > 0 else 0.0
+
+                rej_kg = 0.0
+                if rej_line_col and not df_rej_f.empty:
+                    ln_rej = df_rej_f[df_rej_f[rej_line_col].astype(str).str.strip() == str(ln).strip()]
+                    for rc in [rej_ats_col, rej_prt_col, rej_cam_col]:
+                        if rc: rej_kg += pd.to_numeric(ln_rej[rc], errors='coerce').sum()
+
+                bl_val = 0
+                if bl_line_col and bl_total_col and not df_backlog_f.empty:
+                    ln_bl = df_backlog_f[df_backlog_f[bl_line_col].astype(str).str.strip() == str(ln).strip()]
+                    if not ln_bl.empty:
+                        bl_val = int(pd.to_numeric(ln_bl[bl_total_col], errors='coerce').iloc[-1])
+
+                rows.append({
+                    'Line': str(ln), 'AF Box': n_af, 'Target': int(tgt),
+                    'Yield%': yld, 'Scrap%': scr, 'Rej (kg)': round(rej_kg, 2),
+                    'Backlog': bl_val, 'Status': "🟢" if scr <= 3 else ("🟡" if scr <= 10 else "🔴")
+                })
 
             if rows:
                 df_tbl = pd.DataFrame(rows)
                 def c_yield(v):
-                    if v>=90: return 'color:#00d4aa;font-weight:bold'
-                    if v>=70: return 'color:#ffa502;font-weight:bold'
+                    if v >= 90: return 'color:#00d4aa;font-weight:bold'
+                    if v >= 70: return 'color:#ffa502;font-weight:bold'
                     return 'color:#ff4757;font-weight:bold'
+
                 def c_scrap(v):
-                    if v<=3: return 'color:#00d4aa'
-                    if v<=10: return 'color:#ffa502;font-weight:bold'
+                    if v <= 3: return 'color:#00d4aa'
+                    if v <= 10: return 'color:#ffa502;font-weight:bold'
                     return 'color:#ff4757;font-weight:bold'
-                styled = (df_tbl.style.map(c_yield,subset=['Yield%']).map(c_scrap,subset=['Scrap%'])
-                          .format({'Yield%':'{:.1f}%','Scrap%':'{:.1f}%','Rej (kg)':'{:.2f}',
-                                   'AF Box':'{:,}','Target':'{:,}','Backlog':'{:,}'})
-                          .set_properties(**{'background-color':'#1a2332','color':'#cdd9e5'}))
+
+                styled = (df_tbl.style.map(c_yield, subset=['Yield%']).map(c_scrap, subset=['Scrap%'])
+                          .format({'Yield%': '{:.1f}%', 'Scrap%': '{:.1f}%', 'Rej (kg)': '{:.2f}',
+                                   'AF Box': '{:,}', 'Target': '{:,}', 'Backlog': '{:,}'})
+                          .set_properties(**{'background-color': '#1a2332', 'color': '#cdd9e5'}))
+
                 st.dataframe(styled, use_container_width=True, hide_index=True, height=340)
                 excel_btn(df_tbl.set_index('Line'), "Line Breakdown", "Line_Breakdown")
             else:
-                st.info("💡 ไม่มีข้อมูล")
+                st.info("💡 ไม่มีสายการผลิตที่กำลัง Running")
 
         with col_side:
             st.markdown("##### ⏳ Backlog (งานค้างสะสม)")
