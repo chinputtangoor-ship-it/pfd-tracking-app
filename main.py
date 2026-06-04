@@ -49,7 +49,7 @@ st.markdown("""
     .main-header { font-size: 28px; font-weight: 700; color: #1E3A8A; text-align: center; margin-bottom: 30px; }
     .footer { position: fixed; right: 20px; bottom: 10px; color: rgba(128, 128, 128, 0.5); font-size: 11px; }
     </style>
-    <div class="footer">© 2026 Production Tech | Develop by Phutthangkun | Ver.01.02</div>
+    <div class="footer">© 2026 Production Tech Ver.01.02 | Develop by Phutthangkun</div>
     """, unsafe_allow_html=True)
 
 if 'logged_in' not in st.session_state: st.session_state.logged_in = False
